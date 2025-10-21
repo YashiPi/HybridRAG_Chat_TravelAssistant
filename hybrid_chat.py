@@ -46,9 +46,18 @@ driver = GraphDatabase.driver(
 # Helper functions
 # -----------------------------
 def embed_text(text: str) -> List[float]:
+    if text in embedding_cache:
+        print("DEBUG: Using cached embedding.")
+        return embedding_cache[text]
+
     """Get embedding for a text string."""
+    print("DEBUG: Calling OpenAI for new embedding.")
     resp = client.embeddings.create(model=EMBED_MODEL, input=[text])
-    return resp.data[0].embedding
+    embedding = resp.data[0].embedding
+
+    embedding_cache[text] = embedding
+    return embedding
+
 
 def pinecone_query(query_text: str, top_k=TOP_K):
     """Query Pinecone index using embedding."""
