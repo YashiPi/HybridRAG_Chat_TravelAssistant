@@ -1,0 +1,7 @@
+neo4j
+openai>=1.0.0
+pinecone-client>=3.0.0
+pyvis
+networkx
+tqdm
+python-dotenv
