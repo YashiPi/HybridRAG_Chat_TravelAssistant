@@ -5,9 +5,11 @@ from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
 from neo4j import GraphDatabase
 import config
+import re
 
 # a simple in-memory cache
 embedding_cache = {}
+
 
 # -----------------------------
 # Config
@@ -17,6 +19,7 @@ CHAT_MODEL = "gpt-4o-mini"
 TOP_K = 5
 
 INDEX_NAME = config.PINECONE_INDEX_NAME
+CACHE_INDEX_NAME = "vietnam-travel-cache"
 
 # -----------------------------
 # Initialize clients
@@ -25,17 +28,21 @@ client = OpenAI(api_key=config.OPENAI_API_KEY)
 pc = Pinecone(api_key=config.PINECONE_API_KEY)
 
 # Connect to Pinecone index
-# if INDEX_NAME not in pc.list_indexes().names():
-#     print(f"Creating managed index: {INDEX_NAME}")
-#     pc.create_index(
-#         name=INDEX_NAME,
-#         dimension=config.PINECONE_VECTOR_DIM,
-#         metric="cosine",
-#         spec=ServerlessSpec(cloud="aws", region="us-east1-gcp")
-#     )
+if CACHE_INDEX_NAME not in pc.list_indexes().names():
+    print(f"Creating cache index: {CACHE_INDEX_NAME}")
+    pc.create_index(
+        name=CACHE_INDEX_NAME,
+        dimension=config.PINECONE_VECTOR_DIM,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-east1-gcp")
+    )
 
 print(f"Connecting to Pinecone index: {INDEX_NAME}")
 index = pc.Index(INDEX_NAME)
+cache_index = pc.Index(CACHE_INDEX_NAME)
+
+# Set a similarity threshold
+CACHE_THRESHOLD = 0.95
 
 # Connect to Neo4j
 driver = GraphDatabase.driver(
@@ -45,6 +52,27 @@ driver = GraphDatabase.driver(
 # -----------------------------
 # Helper functions
 # -----------------------------
+
+# A simple list of "fluff" words to ignore
+ACTION_WORDS = [
+    'create', 'make', 'give', 'tell', 'find', 'show', 'get', 'a', 'an', 'the', 'for', 'me',
+    'i', 'would', 'like', 'to', 'go', 'on', 'can', 'you', 'provide', 'with',
+    'it', 'is', 'about', 'what', 'how', 'when', 'where', 'please'
+]
+
+def normalize_query(query: str) -> str:
+    """Cleans a query to focus on its core semantic topic."""
+    query = query.lower()
+    query = re.sub(r'[^\w\s]', '', query) # Remove punctuation
+
+    # Remove action words
+    words = query.split()
+    filtered_words = [word for word in words if word not in ACTION_WORDS]
+
+    # Sort the words to create a consistent, order-independent key
+    filtered_words.sort()
+    return " ".join(filtered_words)
+
 def embed_text(text: str) -> List[float]:
     if text in embedding_cache:
         print("DEBUG: Using cached embedding.")
@@ -59,9 +87,19 @@ def embed_text(text: str) -> List[float]:
     return embedding
 
 
-def pinecone_query(query_text: str, top_k=TOP_K):
-    """Query Pinecone index using embedding."""
-    vec = embed_text(query_text)
+def pinecone_query(query_text: str, top_k=TOP_K, query_vec = None):
+    """
+    Queries the Pinecone index. Can use a pre-computed vector if provided,
+    otherwise it will generate one.
+    """
+
+    if query_vec is not None:
+        print("DEBUG: Using pre-computed vector for Pinecone RAG query.")
+        vec = query_vec
+    # 2. Otherwise, generate a new embedding
+    else:
+        vec = embed_text(query_text)
+    # vec = embed_text(query_text)
     res = index.query(
         vector=vec,
         top_k=top_k,
@@ -145,12 +183,36 @@ def call_chat(prompt_messages):
 def interactive_chat():
     print("Hybrid travel assistant. Type 'exit' to quit.")
     while True:
-        query = input("\nEnter your travel question: ").strip()
-        if not query or query.lower() in ("exit","quit"):
+        raw_query = input("\nEnter your travel question: ").strip()
+        if not raw_query or raw_query.lower() in ("exit","quit"):
             print("Goodbye!")
             break
 
-        matches = pinecone_query(query, top_k=TOP_K)
+        # Normalize the query to get its core topic
+        query = normalize_query(raw_query)
+        print(f"DEBUG: Normalized query to '{query}'")
+
+        query_vec = embed_text(query)  # This will use our dictionary cache
+
+        try:
+            cache_results = cache_index.query(
+                vector = query_vec,
+                top_k = 1,
+                include_metadata = True
+            )
+
+            top_match = cache_results['matches'][0]
+
+            if top_match['score'] > CACHE_THRESHOLD:
+                print("\n Assistant's Answer (from cache): \n")
+                print(top_match['metadata']['answer']) 
+                continue
+        except Exception as e:
+            print("DEBUG: Cache miss or empty cache.")
+
+        # 4. Cache Miss: Run the full pipeline as normal
+        print("\n-> (Cache Miss) Retrieving new context...")
+        matches = pinecone_query(query, top_k=TOP_K, query_vec=query_vec)
 
         if not matches:
             print("Could not find any relevant information. Please try a different query.")
@@ -162,6 +224,15 @@ def interactive_chat():
         answer = call_chat(prompt)
         print("\n=== Assistant Answer ===\n")
         print(answer)
+
+        print("-> Saving new answer to semantic cache...")
+        cache_index.upsert(
+            vectors=[{
+                "id": query, # Use the query text as the ID
+                "values": query_vec,
+                "metadata": {"answer": answer} # Store the full answer
+            }]
+        )
         print("\n=== End ===\n")
 
 if __name__ == "__main__":
