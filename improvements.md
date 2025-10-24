@@ -1,4 +1,4 @@
-# improvements.md
+# Improvements.md
 
 ## Analysis of Improvements for Hybrid Chat Assistant
 
@@ -32,3 +32,18 @@ The `system` prompt in the `build_prompt` function was upgraded to use a "Chain-
 
 - **Improved Accuracy:** Instead of just asking for an answer, the prompt instructs the LLM to "Think step-by-step." It forces the model to first analyze the user's intent, then review the context, then synthesize a plan. This structured thinking process leads to more logical, coherent, and relevant answers, reducing the risk of "hallucination."
 - **Flexibility:** The prompt is general-purpose. It instructs the model to identify the _type_ of query (itinerary, fact, recommendation) and format its response accordingly, making it more robust than a prompt hard-coded for just one task.
+
+### 3. Context Summarization for Cost and Quality
+
+**What was changed:**
+I introduced a new "pre-processing" step in the RAG pipeline. On a cache miss, after retrieving the raw context from Pinecone and Neo4j, the system does not send this noisy data directly to the final LLM.
+
+Instead, it first calls a new function, `summarize_context_llm`. This function bundles the user's query and all the raw data into a prompt for a high-speed Groq model (`llama3-8b-8192`). This model's only job is to read all the facts and "summarize" them into a single, clean paragraph that is directly relevant to the user's query.
+
+Only this clean summary is then passed to the main `gpt-4o-mini` model in the final prompt.
+
+**Why this is an improvement:**
+
+- **Token Savings (Cost Reduction):** The final prompt sent to the expensive `gpt-4o-mini` model is significantly smaller. Instead of sending 1500+ tokens of raw, repetitive data, we send a ~150-token summary. This directly reduces API costs.
+- **Higher Quality Answers (Focus):** The final LLM is no longer distracted by irrelevant data. It receives a "pre-digested" summary, allowing it to focus on its main task: crafting a coherent answer. This reduces the risk of the model getting "lost" in the noise and improves the final quality.
+- **Latency Trade-off:** While this adds one small network call (to Groq), this call is extremely fast. The time saved by `gpt-4o-mini` processing a much smaller prompt often results in a net _decrease_ in total response time.
