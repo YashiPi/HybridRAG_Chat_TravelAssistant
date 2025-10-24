@@ -5,3 +5,4 @@ pyvis
 networkx
 tqdm
 python-dotenv
+groq
