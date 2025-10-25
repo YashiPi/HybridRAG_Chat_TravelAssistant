@@ -84,4 +84,5 @@ Ask it a question. The first time you ask, it will be a "Cache Miss" and run the
   - hybrid_chat.py (fully upgraded version)
 - Write-up:
   - improvements.md (detailing the fixes and advanced features)
-- Screenshot:
+- Video:
+  - https://www.loom.com/share/636e24395115438e9ea66964e4647fa8
