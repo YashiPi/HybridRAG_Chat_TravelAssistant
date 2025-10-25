@@ -151,8 +151,6 @@ def pinecone_query(query_text: str, top_k=TOP_K):
         include_values = False
     )
 
-    # print("DEBUG: Pinecone top 5 results:")
-    # print(len(res["matches"]))
     print(f"DEBUG: Pinecone RAG returned {len(res['matches'])} matches.")
     return res["matches"]
 
@@ -167,26 +165,9 @@ def fetch_graph_context(node_ids: List[str], neighborhood_depth=1):
     LIMIT 20
     """
     with driver.session() as session:
-        # for nid in node_ids:
-            # q = (
-            #     "MATCH (n:Entity {id:$nid})-[r]-(m:Entity) "
-            #     "RETURN type(r) AS rel, labels(m) AS labels, m.id AS id, "
-            #     "m.name AS name, m.type AS type, m.description AS description "
-            #     "LIMIT 10"
-            # )
             recs = session.run(cypher_query, node_ids = node_ids)
             for r in recs:
-                # facts.append({
-                #     "source": r["source"],
-                #     "rel": r["rel"],
-                #     "target_id": r["target_id"],
-                #     "target_name": r["target_name"],
-                #     "target_desc": (r["target_desc"] or "")[:400],
-                #     "labels": r["labels"]
-                # })
                 facts.append(r.data())
-    # print("DEBUG: Graph facts:")
-    # print(len(facts))
     print(f"DEBUG: Neo4j returned {len(facts)} graph facts.")
     return facts
 

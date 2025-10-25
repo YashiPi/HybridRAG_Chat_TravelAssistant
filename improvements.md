@@ -44,6 +44,6 @@ Only this clean summary is then passed to the main `gpt-4o-mini` model in the fi
 
 **Why this is an improvement:**
 
-- **Token Savings (Cost Reduction):** The final prompt sent to the expensive `gpt-4o-mini` model is significantly smaller. Instead of sending 1500+ tokens of raw, repetitive data, we send a ~150-token summary. This directly reduces API costs.
+- **Token Savings (Cost Reduction):** The final prompt sent to the expensive `gpt-4o-mini` model is significantly smaller. Instead of sending 1500+ tokens of raw, repetitive data, we send a ~300-token summary. This directly reduces API costs.
 - **Higher Quality Answers (Focus):** The final LLM is no longer distracted by irrelevant data. It receives a "pre-digested" summary, allowing it to focus on its main task: crafting a coherent answer. This reduces the risk of the model getting "lost" in the noise and improves the final quality.
 - **Latency Trade-off:** While this adds one small network call (to Groq), this call is extremely fast. The time saved by `gpt-4o-mini` processing a much smaller prompt often results in a net _decrease_ in total response time.
