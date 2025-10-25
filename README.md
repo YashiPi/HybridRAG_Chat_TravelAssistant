@@ -86,3 +86,5 @@ Ask it a question. The first time you ask, it will be a "Cache Miss" and run the
   - improvements.md (detailing the fixes and advanced features)
 - Video:
   - https://www.loom.com/share/636e24395115438e9ea66964e4647fa8
+- Document:
+  - https://docs.google.com/document/d/10Q0Bl5NnJZkrUWa8aKfktvEl9DHKQKsKuSkvs5mh3b4/edit?usp=sharing
